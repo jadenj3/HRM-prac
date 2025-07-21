@@ -16,7 +16,6 @@ import coolname
 import hydra
 import pydantic
 from omegaconf import DictConfig
-from wandb.util import make_artifact_name_safe
 from adam_atan2 import AdamATan2
 
 from puzzle_dataset import PuzzleDataset, PuzzleDatasetConfig, PuzzleDatasetMetadata
@@ -126,7 +125,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
         model: nn.Module = model_cls(model_cfg)
         model = loss_head_cls(model, **config.arch.loss.__pydantic_extra__)  # type: ignore
         if "DISABLE_COMPILE" not in os.environ:
-            model = torch.compile(model, dynamic=False, fullgraph=True)  # type: ignore
+            model = torch.compile(model, dynamic=False)  # type: ignore
 
         # Broadcast parameters from rank 0
         if world_size > 1:
@@ -137,7 +136,8 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
     # Optimizers and lr
     optimizers = [
         CastedSparseEmbeddingSignSGD_Distributed(
-            model.model.puzzle_emb.buffers(),  # type: ignore
+            list(model.model.puzzle_emb.buffers()) +
+            list(model.model.value_puzzle_emb.buffers()),  # Add this  # type: ignore
             
             lr=0,  # Needs to be set by scheduler
             weight_decay=config.puzzle_emb_weight_decay,
