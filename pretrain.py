@@ -137,7 +137,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
     optimizers = [
         CastedSparseEmbeddingSignSGD_Distributed(
             list(model.model.puzzle_emb.buffers()) +
-            list(model.model.value_puzzle_emb.buffers()),  # Add this  # type: ignore
+            list(model.model.inner.value_puzzle_emb.buffers()),  # Add this  # type: ignore
             
             lr=0,  # Needs to be set by scheduler
             weight_decay=config.puzzle_emb_weight_decay,
