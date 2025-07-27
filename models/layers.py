@@ -105,7 +105,7 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         self.num_key_value_heads = num_key_value_heads
         self.causal = causal
-        self.lambdas = nn.Parameter(torch.tensor([1, 0.2]))
+        #self.lambdas = nn.Parameter(torch.tensor([1, 0.2]))
         self.qkv_proj = CastedLinear(self.hidden_size, (self.num_heads + 2 * self.num_key_value_heads) * self.head_dim, bias=False)
         self.o_proj = CastedLinear(self.output_size, self.hidden_size, bias=False)
 
