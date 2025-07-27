@@ -141,12 +141,6 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
             weight_decay=config.puzzle_emb_weight_decay,
             world_size=world_size
         ),
-        CastedSparseEmbeddingSignSGD_Distributed(
-            model.model.inner.value_puzzle_emb.buffers(),
-            lr=0,
-            weight_decay=config.puzzle_emb_weight_decay,
-            world_size=world_size
-        ),
         AdamATan2(
             model.parameters(),
 
