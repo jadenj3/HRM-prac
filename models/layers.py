@@ -125,7 +125,7 @@ class Attention(nn.Module):
         if cos_sin is not None:
             cos, sin = cos_sin
             query, key = apply_rotary_pos_emb(query, key, cos, sin)
-        value = value*self.lambdas[0] + value_embed.view_as(value)*self.lambdas[1]
+
         # flash attn
         attn_output = flash_attn_func(q=query, k=key, v=value, causal=self.causal)
         if isinstance(attn_output, tuple):  # fa2 and fa3 compatibility
