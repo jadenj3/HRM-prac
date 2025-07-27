@@ -157,8 +157,10 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
     ]
     optimizer_lrs = [
         config.puzzle_emb_lr,
+        config.puzzle_emb_lr,
         config.lr
     ]
+    assert (len(optimizers) == len(optimizer_lrs))
 
     return model, optimizers, optimizer_lrs
 
