@@ -203,10 +203,10 @@ class HierarchicalReasoningModel_ACTV1_Inner(nn.Module):
             for _H_step in range(self.config.H_cycles):
                 for _L_step in range(self.config.L_cycles):
                     if not ((_H_step == self.config.H_cycles - 1) and (_L_step == self.config.L_cycles - 1)):
-                        z_L = self.L_level(z_L, z_H + input_embeddings, value_embed, **seq_info)
+                        z_L = self.L_level(z_L, z_H + input_embeddings, value_embed=None, **seq_info)
 
                 if not (_H_step == self.config.H_cycles - 1):
-                    z_H = self.H_level(z_H, z_L, value_embed, **seq_info)
+                    z_H = self.H_level(z_H, z_L, value_embed=None, **seq_info)
 
         assert not z_H.requires_grad and not z_L.requires_grad
 
