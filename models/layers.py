@@ -105,7 +105,6 @@ class Attention(nn.Module):
         self.num_heads = num_heads
         self.num_key_value_heads = num_key_value_heads
         self.causal = causal
-        self.lambdas = nn.Parameter(torch.tensor([0.9, 0.1]))
         self.qkv_proj = CastedLinear(self.hidden_size, (self.num_heads + 2 * self.num_key_value_heads) * self.head_dim, bias=False)
         self.o_proj = CastedLinear(self.output_size, self.hidden_size, bias=False)
 
@@ -126,9 +125,7 @@ class Attention(nn.Module):
             cos, sin = cos_sin
             query, key = apply_rotary_pos_emb(query, key, cos, sin)
         if value_embed is not None:
-            value = value*self.lambdas[0] + value_embed.view_as(value)*self.lambdas[1]
-        else:
-            value = value*self.lambdas[0]
+            value = value + value_embed.view_as(value)*0.5
         # flash attn
         attn_output = flash_attn_func(q=query, k=key, v=value, causal=self.causal)
         if isinstance(attn_output, tuple):  # fa2 and fa3 compatibility
