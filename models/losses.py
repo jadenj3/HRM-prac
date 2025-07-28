@@ -77,6 +77,18 @@ class ACTLossHead(nn.Module):
                 "q_halt_accuracy": (valid_metrics & ((outputs["q_halt_logits"] >= 0) == seq_is_correct)).sum(),
                 "steps":          torch.where(valid_metrics, new_carry.steps, 0).sum(),
             }
+            
+            # Add lambda values from attention layers
+            lambda_values = []
+            for name, module in self.model.named_modules():
+                if hasattr(module, 'lambdas') and isinstance(module.lambdas, torch.nn.Parameter):
+                    lambda_values.append(module.lambdas.detach())
+            
+            if lambda_values:
+                # Average lambda values across all attention layers
+                avg_lambdas = torch.stack(lambda_values).mean(dim=0)
+                metrics["lambda_0"] = avg_lambdas[0].item()
+                metrics["lambda_1"] = avg_lambdas[1].item()
 
         # Losses
         # FIXME: Assuming the batch is always full
