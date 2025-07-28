@@ -189,7 +189,7 @@ class HierarchicalReasoningModel_ACTV1_Inner(nn.Module):
 
         # Input encoding
         input_embeddings = self._input_embeddings(batch["inputs"], batch["puzzle_identifiers"])
-        value_embed = self._input_embeddings(batch["inputs"], batch["puzzle_identifiers"], value=True)
+        value_embed = self._input_embeddings(batch["inputs"], batch["puzzle_identifiers"], value=True) #current sota
 
         # Forward iterations
         with torch.no_grad():
