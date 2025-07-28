@@ -120,8 +120,6 @@ class HierarchicalReasoningModel_ACTV1_Inner(nn.Module):
             # Zero init puzzle embeddings
             self.puzzle_emb = CastedSparseEmbedding(self.config.num_puzzle_identifiers, self.config.puzzle_emb_ndim,
                                                     batch_size=self.config.batch_size, init_std=0, cast_to=self.forward_dtype)
-            self.value_puzzle_emb = CastedSparseEmbedding(self.config.num_puzzle_identifiers, self.config.puzzle_emb_ndim,
-                                                    batch_size=self.config.batch_size, init_std=0, cast_to=self.forward_dtype)
 
         # LM Blocks
         if self.config.pos_encodings == "rope":
@@ -156,10 +154,7 @@ class HierarchicalReasoningModel_ACTV1_Inner(nn.Module):
 
         # Puzzle embeddings
         if self.config.puzzle_emb_ndim > 0:
-            if not value:
-                puzzle_embedding = self.puzzle_emb(puzzle_identifiers)
-            else:
-                puzzle_embedding = self.value_puzzle_emb(puzzle_identifiers)
+            puzzle_embedding = self.puzzle_emb(puzzle_identifiers)
             
             pad_count = self.puzzle_emb_len * self.config.hidden_size - puzzle_embedding.shape[-1]
             if pad_count > 0:
