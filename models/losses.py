@@ -87,8 +87,8 @@ class ACTLossHead(nn.Module):
             if lambda_values:
                 # Average lambda values across all attention layers
                 avg_lambdas = torch.stack(lambda_values).mean(dim=0)
-                metrics["lambda_0"] = avg_lambdas[0].item()
-                metrics["lambda_1"] = avg_lambdas[1].item()
+                metrics["lambda_0"] = avg_lambdas[0]
+                metrics["lambda_1"] = avg_lambdas[1]
 
         # Losses
         # FIXME: Assuming the batch is always full
