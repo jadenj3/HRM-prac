@@ -215,6 +215,14 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
     with torch.device("cuda"):
         model: nn.Module = model_cls(model_cfg)
         model = loss_head_cls(model, **config.arch.loss.__pydantic_extra__)  # type: ignore
+        
+        # Check if we'll use Muon (need to convert to bfloat16 first)
+        will_use_muon = any(param.ndim >= 2 and 'emb' not in name.lower() and 'bias' not in name 
+                           for name, param in model.named_parameters())
+        
+        if will_use_muon:
+            model = model.to(torch.bfloat16)
+            
         if "DISABLE_COMPILE" not in os.environ:
             model = torch.compile(model, dynamic=False)  # type: ignore
 
@@ -236,10 +244,6 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
         else:
             # Embeddings, biases, 1D params use standard optimizer
             other_params.append(param)
-    
-    # Convert model to bfloat16 if using Muon
-    if muon_params:
-        model = model.to(torch.bfloat16)
     
     # Optimizers and lr #muon
     optimizers = [
