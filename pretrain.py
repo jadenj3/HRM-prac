@@ -222,9 +222,6 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
         
         if will_use_muon:
             model = model.to(torch.bfloat16)
-            
-        if "DISABLE_COMPILE" not in os.environ:
-            model = torch.compile(model, dynamic=False)  # type: ignore
 
         # Broadcast parameters from rank 0
         if world_size > 1:
@@ -279,6 +276,10 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
     ][:len(optimizers)]
     
     assert (len(optimizers) == len(optimizer_lrs))
+    
+    # Compile model after optimizers are created to avoid non-leaf tensor issues
+    if "DISABLE_COMPILE" not in os.environ:
+        model = torch.compile(model, dynamic=False)  # type: ignore
 
     return model, optimizers, optimizer_lrs
 
