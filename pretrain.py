@@ -241,7 +241,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
     if muon_params:
         model = model.to(torch.bfloat16)
     
-    # Optimizers and lr
+    # Optimizers and lr #muon
     optimizers = [
         CastedSparseEmbeddingSignSGD_Distributed(
             model.model.puzzle_emb.buffers(),
