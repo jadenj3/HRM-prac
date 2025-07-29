@@ -192,6 +192,7 @@ class HierarchicalReasoningModel_ACTV1_Inner(nn.Module):
         value_embed = self._input_embeddings(batch["inputs"], batch["puzzle_identifiers"], value=True) #current sota
 
         # Forward iterations
+        '''
         with torch.no_grad():
             z_H, z_L = carry.z_H, carry.z_L
 
@@ -203,8 +204,8 @@ class HierarchicalReasoningModel_ACTV1_Inner(nn.Module):
                 if not (_H_step == self.config.H_cycles - 1):
                     z_H = self.H_level(z_H, z_L, value_embed=value_embed, **seq_info)
 
-        assert not z_H.requires_grad and not z_L.requires_grad
-
+        assert not z_H.requires_grad and not z_L.requires_grad'''
+        z_H, z_L = carry.z_H, carry.z_L
         # 1-step grad
         z_L = self.L_level(z_L, z_H + input_embeddings, value_embed, **seq_info)
         z_H = self.H_level(z_H, z_L, value_embed, **seq_info)
