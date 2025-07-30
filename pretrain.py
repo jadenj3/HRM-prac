@@ -221,7 +221,12 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
                            for name, param in model.named_parameters())
         
         if will_use_muon:
-            model = model.to(torch.bfloat16)
+            # Convert only parameters to bfloat16, not buffers (to keep buffers as leaf tensors)
+            with torch.no_grad():
+                for param in model.parameters():
+                    param.data = param.data.to(torch.bfloat16)
+                    if param.grad is not None:
+                        param.grad.data = param.grad.data.to(torch.bfloat16)
 
         # Broadcast parameters from rank 0
         if world_size > 1:
