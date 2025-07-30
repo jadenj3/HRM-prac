@@ -261,7 +261,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
         ),
         AdamW(
             muon_params,
-            lr=0,  # Needs to be set by scheduler
+            lr=0,  # Needs to be set by scheduler adamw
             weight_decay=config.weight_decay,
             betas=(config.beta1, config.beta2)
         ) if muon_params else None,
