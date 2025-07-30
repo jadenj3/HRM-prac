@@ -156,9 +156,12 @@ class Muon(torch.optim.Optimizer):
                     eff_lr=torch._as_tensor_fullprec(group["lr"] * max(1, p.size(-2) / p.size(-1)) ** 0.5),
                     eff_weight_decay=torch._as_tensor_fullprec(group["lr"] * group["weight_decay"] * getattr(p, "wd_mul", 1.0)),
                 )
-                p_list = [params[min(base_i + i, len(params) - 1)] for i in range(self.world_size)]
-                futures.append(dist.all_gather(p_list, p_list[self.rank], async_op=True).get_future())
-        torch.futures.collect_all(futures).wait()
+                # Only do distributed all_gather if world_size > 1
+                if self.world_size > 1 and dist.is_initialized():
+                    p_list = [params[min(base_i + i, len(params) - 1)] for i in range(self.world_size)]
+                    futures.append(dist.all_gather(p_list, p_list[self.rank], async_op=True).get_future())
+        if futures:
+            torch.futures.collect_all(futures).wait()
 
 
 @dataclass
