@@ -279,7 +279,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
     
     optimizer_lrs = [
         config.puzzle_emb_lr,
-        0.025,
+        0.0025,
         config.lr
     ][:len(optimizers)]
     
