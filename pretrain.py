@@ -259,7 +259,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
             world_size=world_size
         ),
         AdamATan2(
-            other_params,
+            muon_params,
             lr=0,  # Needs to be set by scheduler
             weight_decay=config.weight_decay,
             betas=(config.beta1, config.beta2)
