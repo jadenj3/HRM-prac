@@ -9,6 +9,7 @@ import torch
 import torch.distributed as dist
 from torch import nn, Tensor
 from torch.utils.data import DataLoader
+from torch.optim import AdamW
 
 import tqdm
 import wandb
@@ -258,7 +259,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
             weight_decay=config.puzzle_emb_weight_decay,
             world_size=world_size
         ),
-        AdamATan2(
+        AdamW(
             muon_params,
             lr=0,  # Needs to be set by scheduler
             weight_decay=config.weight_decay,
