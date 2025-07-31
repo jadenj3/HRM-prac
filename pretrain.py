@@ -170,7 +170,7 @@ def cosine_schedule_with_warmup_lr_lambda(
     if x < (1-cd_frac):
         return base_lr
     else:
-        return (1-x)/cd_frac
+        return ((1-x)/cd_frac)*base_lr
 
     #progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
     #return base_lr * (min_ratio + max(0.0, (1 - min_ratio) * 0.5 * (1.0 + math.cos(math.pi * float(num_cycles) * 2.0 * progress))))
