@@ -158,5 +158,5 @@ def rms_norm(hidden_states: torch.Tensor, variance_epsilon: float) -> torch.Tens
     hidden_states = hidden_states * torch.rsqrt(variance + variance_epsilon)
     return hidden_states.to(input_dtype)'''
 
-def rms_norm(x):
+def rms_norm(x, variance_epsilon):
     return F.rms_norm(x, (x.size(-1),))
