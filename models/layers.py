@@ -149,11 +149,14 @@ class SwiGLU(nn.Module):
         gate, up = self.gate_up_proj(x).chunk(2, dim=-1)
         return self.down_proj(F.silu(gate) * up)
 
-
+'''
 def rms_norm(hidden_states: torch.Tensor, variance_epsilon: float) -> torch.Tensor:
     input_dtype = hidden_states.dtype
     hidden_states = hidden_states.to(torch.float32)
 
     variance = hidden_states.square().mean(-1, keepdim=True)
     hidden_states = hidden_states * torch.rsqrt(variance + variance_epsilon)
-    return hidden_states.to(input_dtype)
+    return hidden_states.to(input_dtype)'''
+
+def rms_norm(x):
+    return F.rms_norm(x, (x.size(-1),))
