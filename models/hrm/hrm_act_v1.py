@@ -80,7 +80,7 @@ class HierarchicalReasoningModel_ACTV1Block(nn.Module):
         hidden_states = rms_norm(hidden_states + self.self_attn(cos_sin=cos_sin, hidden_states=hidden_states, value_embed = value_embed), variance_epsilon=self.norm_eps)
         # Fully Connected
         hidden_states = rms_norm(hidden_states + self.mlp(hidden_states), variance_epsilon=self.norm_eps)
-        return hidden_states
+        return hidden_states #test
 
 
 class HierarchicalReasoningModel_ACTV1ReasoningModule(nn.Module):
