@@ -117,7 +117,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
         causal=False  # Non-autoregressive
     )
 
-    # Instantiate model with loss head
+    # Instantiate model with loss headct3est
     model_cls = load_model_class(config.arch.name)
     loss_head_cls = load_model_class(config.arch.loss.name)
 
