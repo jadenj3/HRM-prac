@@ -164,7 +164,7 @@ def cosine_schedule_with_warmup_lr_lambda(
     if current_step < num_warmup_steps:
         return base_lr * float(current_step) / float(max(1, num_warmup_steps))
 
-    cd_frac = 0.5
+    cd_frac = 0.7
     x = (current_step-num_warmup_steps)/(num_training_steps-num_warmup_steps)
     assert 0 <= x < 1
     if x < (1-cd_frac):
