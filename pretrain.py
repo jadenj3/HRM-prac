@@ -248,6 +248,66 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
         optim.step()
         optim.zero_grad()
 
+    # Compute detailed gradient and weight statistics
+    grad_stats = {
+        'total': 0.0,
+        'embed_tokens': 0.0,
+        'value_embed': 0.0,
+        'puzzle_emb': 0.0,
+        'H_level': 0.0,
+        'L_level': 0.0,
+        'lm_head': 0.0,
+        'q_head': 0.0,
+    }
+    
+    weight_stats = {
+        'total': 0.0,
+        'embed_tokens': 0.0,
+        'value_embed': 0.0,
+        'puzzle_emb': 0.0,
+        'H_level': 0.0,
+        'L_level': 0.0,
+        'lm_head': 0.0,
+        'q_head': 0.0,
+    }
+    
+    # Per-parameter tracking
+    for name, param in train_state.model.named_parameters():
+        if param.grad is not None:
+            grad_norm = param.grad.data.norm(2).item()
+            weight_norm = param.data.norm(2).item()
+            
+            grad_stats['total'] += grad_norm ** 2
+            weight_stats['total'] += weight_norm ** 2
+            
+            # Component-specific tracking
+            if 'embed_tokens' in name and 'value' not in name:
+                grad_stats['embed_tokens'] += grad_norm ** 2
+                weight_stats['embed_tokens'] += weight_norm ** 2
+            elif 'value_embed' in name:
+                grad_stats['value_embed'] += grad_norm ** 2
+                weight_stats['value_embed'] += weight_norm ** 2
+            elif 'puzzle_emb' in name:
+                grad_stats['puzzle_emb'] += grad_norm ** 2
+                weight_stats['puzzle_emb'] += weight_norm ** 2
+            elif 'H_level' in name:
+                grad_stats['H_level'] += grad_norm ** 2
+                weight_stats['H_level'] += weight_norm ** 2
+            elif 'L_level' in name:
+                grad_stats['L_level'] += grad_norm ** 2
+                weight_stats['L_level'] += weight_norm ** 2
+            elif 'lm_head' in name:
+                grad_stats['lm_head'] += grad_norm ** 2
+                weight_stats['lm_head'] += weight_norm ** 2
+            elif 'q_head' in name:
+                grad_stats['q_head'] += grad_norm ** 2
+                weight_stats['q_head'] += weight_norm ** 2
+    
+    # Take square root of sums
+    for k in grad_stats:
+        grad_stats[k] = grad_stats[k] ** 0.5
+        weight_stats[k] = weight_stats[k] ** 0.5
+
     # Reduce metrics
     if len(metrics):
         assert not any(v.requires_grad for v in metrics.values())
@@ -264,9 +324,31 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
             
             # Postprocess
             count = max(reduced_metrics["count"], 1)  # Avoid NaNs
+            
+            # Calculate training accuracy before normalization
+            if "correct" in reduced_metrics:
+                train_accuracy = reduced_metrics["correct"] / count
+            else:
+                train_accuracy = 0.0
+            
             reduced_metrics = {f"train/{k}": v / (global_batch_size if k.endswith("loss") else count) for k, v in reduced_metrics.items()}
+            reduced_metrics["train/accuracy"] = train_accuracy
 
             reduced_metrics["train/lr"] = lr_this_step
+            
+            # Add gradient norms
+            for component, norm in grad_stats.items():
+                reduced_metrics[f"train/grad_norm/{component}"] = norm
+            
+            # Add weight norms
+            for component, norm in weight_stats.items():
+                reduced_metrics[f"train/weight_norm/{component}"] = norm
+            
+            # Add gradient/weight ratios (learning signal strength)
+            for component in grad_stats:
+                if weight_stats[component] > 0:
+                    reduced_metrics[f"train/grad_weight_ratio/{component}"] = grad_stats[component] / weight_stats[component]
+            
             return reduced_metrics
 
 
