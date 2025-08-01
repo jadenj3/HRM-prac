@@ -236,19 +236,8 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
         for param in train_state.model.parameters():
             if param.grad is not None:
                 dist.all_reduce(param.grad)
-            
-    # Apply optimizer
-    lr_this_step = None    
-    for optim, base_lr in zip(train_state.optimizers, train_state.optimizer_lrs):
-        lr_this_step = compute_lr(base_lr, config, train_state)
-
-        for param_group in optim.param_groups:
-            param_group['lr'] = lr_this_step
-            
-        optim.step()
-        optim.zero_grad()
-
-    # Compute detailed gradient and weight statistics
+    
+    # Compute detailed gradient and weight statistics BEFORE optimizer.step()
     grad_stats = {
         'total': 0.0,
         'embed_tokens': 0.0,
@@ -307,6 +296,17 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
     for k in grad_stats:
         grad_stats[k] = grad_stats[k] ** 0.5
         weight_stats[k] = weight_stats[k] ** 0.5
+    
+    # Apply optimizer (AFTER computing gradient stats)
+    lr_this_step = None    
+    for optim, base_lr in zip(train_state.optimizers, train_state.optimizer_lrs):
+        lr_this_step = compute_lr(base_lr, config, train_state)
+
+        for param_group in optim.param_groups:
+            param_group['lr'] = lr_this_step
+            
+        optim.step()
+        optim.zero_grad()
 
     # Reduce metrics
     if len(metrics):
