@@ -12,26 +12,25 @@ from pydantic import BaseModel
 
 from common import PuzzleDatasetMetadata, dihedral_transform
 
-
 cli = ArgParser()
 
 
 class DataProcessConfig(BaseModel):
-    # ARC-1 (supports both old structure and new single-file format)
-    dataset_dirs: List[str] = ["dataset/raw-data/ARC-AGI", "dataset/raw-data/ConceptARC"]
+    # ARC-1
+    dataset_dirs: List[str] = ["dataset/raw-data/ARC-AGI/data", "dataset/raw-data/ConceptARC/corpus"]
     output_dir: str = "data/arc-aug-1000"
-    
+
     # ARC-2
-    # dataset_dirs: List[str] = ["dataset/raw-data/ARC-AGI-2"]
+    # dataset_dirs: List[str] = ["dataset/raw-data/ARC-AGI-2/data"]
     # output_dir: str = "data/arc-2-aug-1000"
 
     seed: int = 42
     num_aug: int = 1000
-    
-    
+
+
 ARCMaxGridSize = 30
 ARCAugmentRetriesFactor = 5
-    
+
 
 @dataclass
 class ARCPuzzle:
@@ -39,7 +38,7 @@ class ARCPuzzle:
 
     examples: List[Tuple[np.ndarray, np.ndarray]]
 
-    
+
 def arc_grid_to_np(grid: List[List[int]]):
     arr = np.array(grid)
 
@@ -64,7 +63,8 @@ def np_grid_to_seq_translational_augment(inp: np.ndarray, out: np.ndarray, do_tr
     result = []
     for grid in [inp, out]:
         nrow, ncol = grid.shape
-        grid = np.pad(grid + 2, ((pad_r, ARCMaxGridSize - pad_r - nrow), (pad_c, ARCMaxGridSize - pad_c - ncol)), constant_values=0)
+        grid = np.pad(grid + 2, ((pad_r, ARCMaxGridSize - pad_r - nrow), (pad_c, ARCMaxGridSize - pad_c - ncol)),
+                      constant_values=0)
 
         # Add <eos>
         eos_row, eos_col = pad_r + nrow, pad_c + ncol
@@ -83,59 +83,33 @@ def puzzle_hash(puzzle: dict):
     def _grid_hash(grid: np.ndarray):
         buffer = [x.to_bytes(1) for x in grid.shape]
         buffer.append(grid.tobytes())
-        
+
         return hashlib.sha256(b"".join(buffer)).hexdigest()
-    
+
     hashes = []
     for example_type, example in puzzle.items():
         for input, label in example.examples:
             hashes.append(f"{_grid_hash(input)}|{_grid_hash(label)}")
-            
+
     hashes.sort()
     return hashlib.sha256("|".join(hashes).encode()).hexdigest()
 
 
-def convert_single_arc_puzzle(results: dict, default_name: str, puzzle: dict, aug_count: int, dest_mapping: Dict[str, Tuple[str, str]]):
+def convert_single_arc_puzzle(results: dict, default_name: str, puzzle: dict, aug_count: int,
+                              dest_mapping: Dict[str, Tuple[str, str]]):
     # Remove "name"
     name = puzzle.pop("name", default_name)
-    
+
     # Convert
     dests = set(dest_mapping.values())
     converted = {dest: ARCPuzzle(name, []) for dest in dests}
-    skipped_examples = 0
     for example_type, examples in puzzle.items():
-        if example_type not in dest_mapping:
-            continue  # Skip unknown keys
         dest = dest_mapping[example_type]
-        
-        # Handle both list format and dict format (numbered examples)
-        if isinstance(examples, list):
-            # Original format: list of examples
-            for example in examples:
-                if "output" in example:  # Only add examples with outputs
-                    converted[dest].examples.append((arc_grid_to_np(example["input"]), arc_grid_to_np(example["output"])))
-                else:
-                    skipped_examples += 1
-        elif isinstance(examples, dict):
-            # New format: dict with numbered keys
-            # Sort by key to ensure consistent ordering
-            sorted_examples = [examples[str(i)] for i in sorted([int(k) for k in examples.keys() if k.isdigit()])]
-            for example in sorted_examples:
-                if "output" in example:  # Only add examples with outputs
-                    converted[dest].examples.append((arc_grid_to_np(example["input"]), arc_grid_to_np(example["output"])))
-                else:
-                    skipped_examples += 1
-    
-    if skipped_examples > 0:
-        print(f"[Puzzle {name}] Skipped {skipped_examples} examples without outputs")
-    
-    # Skip puzzles that have no valid examples
-    if all(len(puzzle.examples) == 0 for puzzle in converted.values()):
-        print(f"[Puzzle {name}] No valid examples found, skipping puzzle")
-        return
+        converted[dest].examples.extend(
+            [(arc_grid_to_np(example["input"]), arc_grid_to_np(example["output"])) for example in examples])
 
     group = [converted]
-    
+
     # Augment
     if aug_count > 0:
         hashes = {puzzle_hash(converted)}
@@ -143,25 +117,28 @@ def convert_single_arc_puzzle(results: dict, default_name: str, puzzle: dict, au
         for _trial in range(ARCAugmentRetriesFactor * aug_count):
             # Augment plan
             trans_id = np.random.randint(0, 8)
-            mapping = np.concatenate([np.arange(0, 1, dtype=np.uint8), np.random.permutation(np.arange(1, 10, dtype=np.uint8))])  # Permute colors, Excluding "0" (black)
-            
+            mapping = np.concatenate([np.arange(0, 1, dtype=np.uint8), np.random.permutation(
+                np.arange(1, 10, dtype=np.uint8))])  # Permute colors, Excluding "0" (black)
+
             aug_repr = f"t{trans_id}_{''.join(str(x) for x in mapping)}"
 
             def _map_grid(grid: np.ndarray):
                 return dihedral_transform(mapping[grid], trans_id)
-            
+
             # Check duplicate
-            augmented = {dest: ARCPuzzle(f"{puzzle.id}_{aug_repr}", [(_map_grid(input), _map_grid(label)) for (input, label) in puzzle.examples]) for dest, puzzle in converted.items()}
+            augmented = {dest: ARCPuzzle(f"{puzzle.id}_{aug_repr}",
+                                         [(_map_grid(input), _map_grid(label)) for (input, label) in puzzle.examples])
+                         for dest, puzzle in converted.items()}
             h = puzzle_hash(augmented)
             if h not in hashes:
                 hashes.add(h)
                 group.append(augmented)
-                
+
             if len(group) >= aug_count + 1:
                 break
-            
+
         if len(group) < aug_count + 1:
-            print (f"[Puzzle {name}] augmentation not full, only {len(group)}")
+            print(f"[Puzzle {name}] augmentation not full, only {len(group)}")
 
     # Append
     for dest in dests:
@@ -179,90 +156,45 @@ def load_puzzles_arcagi(results: dict, dataset_path: str, config: DataProcessCon
         "evaluation": [(1.0, ("test", "all"))],
         "_default": [(1.0, ("train", "all"))]
     }
-    
-    total_puzzles = 0
-    
-    # First try to load standard ARC format (single JSON files)
-    standard_files = {
-        "training": ["arc-agi_training_challenges.json", "training_challenges.json", "train.json"],
-        "evaluation": ["arc-agi_evaluation_challenges.json", "evaluation_challenges.json", "eval.json", "test.json"]
-    }
-    
-    loaded_any = False
-    for split_name, possible_files in standard_files.items():
-        for filename in possible_files:
-            filepath = os.path.join(dataset_path, filename)
-            if os.path.exists(filepath):
-                print(f"Loading {filepath}...")
-                with open(filepath, "r") as f:
-                    all_puzzles = json.load(f)
-                
-                puzzles = list(all_puzzles.items())
-                np.random.shuffle(puzzles)
-                
-                # Process each puzzle
-                for idx, (puzzle_id, puzzle_data) in enumerate(puzzles):
-                    fraction = idx / len(puzzles)
-                    test_examples_dest = None
-                    for f, dest in test_examples_map.get(split_name, test_examples_map["_default"]):
-                        if fraction < f:
-                            test_examples_dest = dest
-                            break
-                    
-                    assert test_examples_dest is not None
-                    convert_single_arc_puzzle(results, puzzle_id, puzzle_data, config.num_aug, 
-                                            {"train": train_examples_dest, "test": test_examples_dest})
-                    total_puzzles += 1
-                
-                loaded_any = True
-                break
-    
-    # If no standard format found, fall back to original directory-based approach
-    if not loaded_any:
-        for subdir in os.scandir(dataset_path):
-            if subdir.is_dir():
-                # Check for single combined JSON first
-                combined_json = os.path.join(subdir.path, f"{subdir.name}_challenges.json")
-                if os.path.exists(combined_json):
-                    print(f"Loading {combined_json}...")
-                    with open(combined_json, "r") as f:
-                        all_puzzles = json.load(f)
-                    puzzles = list(all_puzzles.items())
-                else:
-                    # Load individual puzzle files
-                    puzzles = []
-                    for filename in glob(os.path.join(subdir.path, "*.json")):
-                        with open(filename, "r") as f:
-                            puzzles.append((Path(filename).stem, json.load(f)))
-                
-                # Shuffle puzzles
-                np.random.shuffle(puzzles)
-                
-                # Assign by fraction
-                for idx, (default_name, puzzle) in enumerate(puzzles):
-                    fraction = idx / len(puzzles)
-                    test_examples_dest = None
-                    for f, dest in test_examples_map.get(subdir.name, test_examples_map["_default"]):
-                        if fraction < f:
-                            test_examples_dest = dest
-                            break
-                            
-                    assert test_examples_dest is not None
-                    
-                    convert_single_arc_puzzle(results, default_name, puzzle, config.num_aug, {"train": train_examples_dest, "test": test_examples_dest})
-                    total_puzzles += 1
 
-    print (f"[{dataset_path}] total puzzles: {total_puzzles}")
+    total_puzzles = 0
+    for subdir in os.scandir(dataset_path):
+        if subdir.is_dir():
+            # Load all puzzles in this directory
+            puzzles = []
+            for filename in glob(os.path.join(subdir.path, "*.json")):
+                with open(filename, "r") as f:
+                    puzzles.append((Path(filename).stem, json.load(f)))
+
+            # Shuffle puzzles
+            np.random.shuffle(puzzles)
+
+            # Assign by fraction
+            for idx, (default_name, puzzle) in enumerate(puzzles):
+                fraction = idx / len(puzzles)
+                test_examples_dest = None
+                for f, dest in test_examples_map.get(subdir.name, test_examples_map["_default"]):
+                    if fraction < f:
+                        test_examples_dest = dest
+                        break
+
+                assert test_examples_dest is not None
+
+                convert_single_arc_puzzle(results, default_name, puzzle, config.num_aug,
+                                          {"train": train_examples_dest, "test": test_examples_dest})
+                total_puzzles += 1
+
+    print(f"[{dataset_path}] total puzzles: {total_puzzles}")
 
 
 def convert_dataset(config: DataProcessConfig):
     np.random.seed(config.seed)
-    
+
     # Read dataset
     data = {}
     for dataset_dir in config.dataset_dirs:
         load_puzzles_arcagi(data, dataset_dir, config)
-    
+
     # Map global puzzle identifiers
     num_identifiers = 1  # 0 is blank
     identifier_map = {}
@@ -274,12 +206,12 @@ def convert_dataset(config: DataProcessConfig):
                         identifier_map[puzzle.id] = num_identifiers
                         num_identifiers += 1
 
-    print (f"Total puzzle IDs (including <blank>): {num_identifiers}")
+    print(f"Total puzzle IDs (including <blank>): {num_identifiers}")
 
     # Save
     for split_name, split in data.items():
         os.makedirs(os.path.join(config.output_dir, split_name), exist_ok=True)
-        
+
         # Translational augmentations
         enable_translational_augment = split_name == "train"
 
@@ -287,59 +219,60 @@ def convert_dataset(config: DataProcessConfig):
         total_examples = 0
         total_puzzles = 0
         total_groups = 0
-        
+
         for subset_name, subset in split.items():
             # Construct subset
             results = {k: [] for k in ["inputs", "labels", "puzzle_identifiers", "puzzle_indices", "group_indices"]}
             results["puzzle_indices"].append(0)
             results["group_indices"].append(0)
-            
+
             example_id = 0
             puzzle_id = 0
-            
+
             for group in subset:
                 for puzzle in group:
                     # Push puzzle
                     no_aug_id = np.random.randint(0, len(puzzle.examples))
                     for _idx_ex, (inp, out) in enumerate(puzzle.examples):
-                        inp, out = np_grid_to_seq_translational_augment(inp, out, do_translation=enable_translational_augment and _idx_ex != no_aug_id)
-                            
+                        inp, out = np_grid_to_seq_translational_augment(inp, out,
+                                                                        do_translation=enable_translational_augment and _idx_ex != no_aug_id)
+
                         results["inputs"].append(inp)
                         results["labels"].append(out)
                         example_id += 1
-                        
+
                         total_examples += 1
 
                     results["puzzle_indices"].append(example_id)
                     results["puzzle_identifiers"].append(identifier_map[puzzle.id])
-                    
+
                     puzzle_id += 1
-                    
+
                     total_puzzles += 1
-                    
+
                 # Push group
                 results["group_indices"].append(puzzle_id)
                 total_groups += 1
-            
+
             for k, v in results.items():
                 if k in {"inputs", "labels"}:
                     v = np.stack(v, 0)
                 else:
                     v = np.array(v, dtype=np.int32)
-                
+
                 np.save(os.path.join(config.output_dir, split_name, f"{subset_name}__{k}.npy"), v)
-        
+
         # Metadata
         metadata = PuzzleDatasetMetadata(
             seq_len=ARCMaxGridSize * ARCMaxGridSize,
             vocab_size=10 + 2,  # PAD + EOS + "0" ... "9"
-            
+
             pad_id=0,
             ignore_label_id=0,
-            
+
             blank_identifier_id=0,
             num_puzzle_identifiers=num_identifiers,
-            
+
             total_groups=total_groups,
             mean_puzzle_examples=total_examples / total_puzzles,
             sets=list(split.keys())
@@ -348,11 +281,11 @@ def convert_dataset(config: DataProcessConfig):
         # Save metadata as JSON.
         with open(os.path.join(config.output_dir, split_name, "dataset.json"), "w") as f:
             json.dump(metadata.model_dump(), f)
-            
+
     # Save IDs mapping
     with open(os.path.join(config.output_dir, "identifiers.json"), "w") as f:
         ids_mapping = {v: k for k, v in identifier_map.items()}
-        
+
         json.dump([ids_mapping.get(i, "<blank>") for i in range(num_identifiers)], f)
 
 
