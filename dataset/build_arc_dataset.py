@@ -17,12 +17,12 @@ cli = ArgParser()
 
 
 class DataProcessConfig(BaseModel):
-    # ARC-1
-    dataset_dirs: List[str] = ["dataset/raw-data/ARC-AGI/data", "dataset/raw-data/ConceptARC/corpus"]
+    # ARC-1 (supports both old structure and new single-file format)
+    dataset_dirs: List[str] = ["dataset/raw-data/ARC-AGI", "dataset/raw-data/ConceptARC"]
     output_dir: str = "data/arc-aug-1000"
     
     # ARC-2
-    # dataset_dirs: List[str] = ["dataset/raw-data/ARC-AGI-2/data"]
+    # dataset_dirs: List[str] = ["dataset/raw-data/ARC-AGI-2"]
     # output_dir: str = "data/arc-2-aug-1000"
 
     seed: int = 42
@@ -103,8 +103,19 @@ def convert_single_arc_puzzle(results: dict, default_name: str, puzzle: dict, au
     dests = set(dest_mapping.values())
     converted = {dest: ARCPuzzle(name, []) for dest in dests}
     for example_type, examples in puzzle.items():
+        if example_type not in dest_mapping:
+            continue  # Skip unknown keys
         dest = dest_mapping[example_type]
-        converted[dest].examples.extend([(arc_grid_to_np(example["input"]), arc_grid_to_np(example["output"])) for example in examples])
+        
+        # Handle both list format and dict format (numbered examples)
+        if isinstance(examples, list):
+            # Original format: list of examples
+            converted[dest].examples.extend([(arc_grid_to_np(example["input"]), arc_grid_to_np(example["output"])) for example in examples])
+        elif isinstance(examples, dict):
+            # New format: dict with numbered keys
+            # Sort by key to ensure consistent ordering
+            sorted_examples = [examples[str(i)] for i in sorted([int(k) for k in examples.keys() if k.isdigit()])]
+            converted[dest].examples.extend([(arc_grid_to_np(example["input"]), arc_grid_to_np(example["output"])) for example in sorted_examples])
 
     group = [converted]
     
@@ -153,30 +164,76 @@ def load_puzzles_arcagi(results: dict, dataset_path: str, config: DataProcessCon
     }
     
     total_puzzles = 0
-    for subdir in os.scandir(dataset_path):
-        if subdir.is_dir():
-            # Load all puzzles in this directory
-            puzzles = []
-            for filename in glob(os.path.join(subdir.path, "*.json")):
-                with open(filename, "r") as f:
-                    puzzles.append((Path(filename).stem, json.load(f)))
-                    
-            # Shuffle puzzles
-            np.random.shuffle(puzzles)
-            
-            # Assign by fraction
-            for idx, (default_name, puzzle) in enumerate(puzzles):
-                fraction = idx / len(puzzles)
-                test_examples_dest = None
-                for f, dest in test_examples_map.get(subdir.name, test_examples_map["_default"]):
-                    if fraction < f:
-                        test_examples_dest = dest
-                        break
-                        
-                assert test_examples_dest is not None
+    
+    # First try to load standard ARC format (single JSON files)
+    standard_files = {
+        "training": ["arc-agi_training_challenges.json", "training_challenges.json", "train.json"],
+        "evaluation": ["arc-agi_evaluation_challenges.json", "evaluation_challenges.json", "eval.json", "test.json"]
+    }
+    
+    loaded_any = False
+    for split_name, possible_files in standard_files.items():
+        for filename in possible_files:
+            filepath = os.path.join(dataset_path, filename)
+            if os.path.exists(filepath):
+                print(f"Loading {filepath}...")
+                with open(filepath, "r") as f:
+                    all_puzzles = json.load(f)
                 
-                convert_single_arc_puzzle(results, default_name, puzzle, config.num_aug, {"train": train_examples_dest, "test": test_examples_dest})
-                total_puzzles += 1
+                puzzles = list(all_puzzles.items())
+                np.random.shuffle(puzzles)
+                
+                # Process each puzzle
+                for idx, (puzzle_id, puzzle_data) in enumerate(puzzles):
+                    fraction = idx / len(puzzles)
+                    test_examples_dest = None
+                    for f, dest in test_examples_map.get(split_name, test_examples_map["_default"]):
+                        if fraction < f:
+                            test_examples_dest = dest
+                            break
+                    
+                    assert test_examples_dest is not None
+                    convert_single_arc_puzzle(results, puzzle_id, puzzle_data, config.num_aug, 
+                                            {"train": train_examples_dest, "test": test_examples_dest})
+                    total_puzzles += 1
+                
+                loaded_any = True
+                break
+    
+    # If no standard format found, fall back to original directory-based approach
+    if not loaded_any:
+        for subdir in os.scandir(dataset_path):
+            if subdir.is_dir():
+                # Check for single combined JSON first
+                combined_json = os.path.join(subdir.path, f"{subdir.name}_challenges.json")
+                if os.path.exists(combined_json):
+                    print(f"Loading {combined_json}...")
+                    with open(combined_json, "r") as f:
+                        all_puzzles = json.load(f)
+                    puzzles = list(all_puzzles.items())
+                else:
+                    # Load individual puzzle files
+                    puzzles = []
+                    for filename in glob(os.path.join(subdir.path, "*.json")):
+                        with open(filename, "r") as f:
+                            puzzles.append((Path(filename).stem, json.load(f)))
+                
+                # Shuffle puzzles
+                np.random.shuffle(puzzles)
+                
+                # Assign by fraction
+                for idx, (default_name, puzzle) in enumerate(puzzles):
+                    fraction = idx / len(puzzles)
+                    test_examples_dest = None
+                    for f, dest in test_examples_map.get(subdir.name, test_examples_map["_default"]):
+                        if fraction < f:
+                            test_examples_dest = dest
+                            break
+                            
+                    assert test_examples_dest is not None
+                    
+                    convert_single_arc_puzzle(results, default_name, puzzle, config.num_aug, {"train": train_examples_dest, "test": test_examples_dest})
+                    total_puzzles += 1
 
     print (f"[{dataset_path}] total puzzles: {total_puzzles}")
 
