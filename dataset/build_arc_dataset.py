@@ -102,6 +102,7 @@ def convert_single_arc_puzzle(results: dict, default_name: str, puzzle: dict, au
     # Convert
     dests = set(dest_mapping.values())
     converted = {dest: ARCPuzzle(name, []) for dest in dests}
+    skipped_examples = 0
     for example_type, examples in puzzle.items():
         if example_type not in dest_mapping:
             continue  # Skip unknown keys
@@ -110,12 +111,28 @@ def convert_single_arc_puzzle(results: dict, default_name: str, puzzle: dict, au
         # Handle both list format and dict format (numbered examples)
         if isinstance(examples, list):
             # Original format: list of examples
-            converted[dest].examples.extend([(arc_grid_to_np(example["input"]), arc_grid_to_np(example["output"])) for example in examples])
+            for example in examples:
+                if "output" in example:  # Only add examples with outputs
+                    converted[dest].examples.append((arc_grid_to_np(example["input"]), arc_grid_to_np(example["output"])))
+                else:
+                    skipped_examples += 1
         elif isinstance(examples, dict):
             # New format: dict with numbered keys
             # Sort by key to ensure consistent ordering
             sorted_examples = [examples[str(i)] for i in sorted([int(k) for k in examples.keys() if k.isdigit()])]
-            converted[dest].examples.extend([(arc_grid_to_np(example["input"]), arc_grid_to_np(example["output"])) for example in sorted_examples])
+            for example in sorted_examples:
+                if "output" in example:  # Only add examples with outputs
+                    converted[dest].examples.append((arc_grid_to_np(example["input"]), arc_grid_to_np(example["output"])))
+                else:
+                    skipped_examples += 1
+    
+    if skipped_examples > 0:
+        print(f"[Puzzle {name}] Skipped {skipped_examples} examples without outputs")
+    
+    # Skip puzzles that have no valid examples
+    if all(len(puzzle.examples) == 0 for puzzle in converted.values()):
+        print(f"[Puzzle {name}] No valid examples found, skipping puzzle")
+        return
 
     group = [converted]
     
