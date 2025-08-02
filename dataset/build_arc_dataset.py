@@ -81,7 +81,7 @@ def np_grid_to_seq_translational_augment(inp: np.ndarray, out: np.ndarray, do_tr
 def puzzle_hash(puzzle: dict):
     # Hash the puzzle for checking equivalence
     def _grid_hash(grid: np.ndarray):
-        buffer = [x.to_bytes(1) for x in grid.shape]
+        buffer = [int(x).to_bytes(1, 'little') for x in grid.shape]
         buffer.append(grid.tobytes())
 
         return hashlib.sha256(b"".join(buffer)).hexdigest()
