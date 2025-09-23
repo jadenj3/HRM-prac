@@ -191,9 +191,16 @@ class HierarchicalReasoningModel_ACTV1_Inner(nn.Module):
         )
 
     def reset_carry(self, reset_flag: torch.Tensor, carry: HierarchicalReasoningModel_ACTV1InnerCarry):
+        del reset_flag  # No-op: we always refresh hidden state for every iteration
+
+        batch_size, seq_len_plus, _ = carry.z_H.shape
+
+        z_H = self.H_init.view(1, 1, -1).expand(batch_size, seq_len_plus, -1).clone()
+        z_L = self.L_init.view(1, 1, -1).expand(batch_size, seq_len_plus, -1).clone()
+
         return HierarchicalReasoningModel_ACTV1InnerCarry(
-            z_H=torch.where(reset_flag.view(-1, 1, 1), self.H_init, carry.z_H),
-            z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init, carry.z_L),
+            z_H=z_H,
+            z_L=z_L,
         )
 
     def forward(self, carry: HierarchicalReasoningModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor]) -> Tuple[
