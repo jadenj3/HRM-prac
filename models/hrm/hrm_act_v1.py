@@ -211,7 +211,7 @@ class HierarchicalReasoningModel_ACTV1_Inner(nn.Module):
         z_H = self.H_level(z_H, z_L, value_embed, **seq_info)
 
         # LM Outputs
-        new_carry = HierarchicalReasoningModel_ACTV1InnerCarry(z_H=z_H.detach(), z_L=z_L.detach())  # New carry no grad
+        new_carry = HierarchicalReasoningModel_ACTV1InnerCarry(z_H=z_H, z_L=z_L)  # Preserve graph for outer loop
         output = self.lm_head(z_H)[:, self.puzzle_emb_len:]
 
         # Q head
@@ -242,6 +242,21 @@ class HierarchicalReasoningModel_ACTV1(nn.Module):
             halted=torch.ones((batch_size, ), dtype=torch.bool),  # Default to halted
             
             current_data={k: torch.empty_like(v) for k, v in batch.items()}
+        )
+        
+    def detach_carry(self, carry: HierarchicalReasoningModel_ACTV1Carry) -> HierarchicalReasoningModel_ACTV1Carry:
+        """Return a version of the carry detached from the autograd graph."""
+
+        inner_carry = HierarchicalReasoningModel_ACTV1InnerCarry(
+            z_H=carry.inner_carry.z_H.detach(),
+            z_L=carry.inner_carry.z_L.detach(),
+        )
+
+        return HierarchicalReasoningModel_ACTV1Carry(
+            inner_carry=inner_carry,
+            steps=carry.steps.detach(),
+            halted=carry.halted.detach(),
+            current_data={k: v.detach() for k, v in carry.current_data.items()}
         )
         
     def forward(self, carry: HierarchicalReasoningModel_ACTV1Carry, batch: Dict[str, torch.Tensor]) -> Tuple[HierarchicalReasoningModel_ACTV1Carry, Dict[str, torch.Tensor]]:

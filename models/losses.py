@@ -49,6 +49,7 @@ class ACTLossHead(nn.Module):
     def forward(
         self,
         return_keys: Sequence[str],
+        detach_carry: bool = True,
         # Model args
         **model_kwargs,
     ) -> Tuple[Any, torch.Tensor, Dict[str, torch.Tensor], Optional[Dict[str, torch.Tensor]], torch.Tensor]:
@@ -110,4 +111,9 @@ class ACTLossHead(nn.Module):
         # Filter outputs for return
         detached_outputs = {k: outputs[k].detach() for k in return_keys if k in outputs}
 
-        return new_carry, lm_loss + 0.5 * (q_halt_loss + q_continue_loss), metrics, detached_outputs, new_carry.halted.all()
+        carry_to_return = new_carry if not detach_carry else self.model.detach_carry(new_carry)  # type: ignore
+
+        return carry_to_return, lm_loss + 0.5 * (q_halt_loss + q_continue_loss), metrics, detached_outputs, new_carry.halted.all()
+
+    def detach_carry(self, carry):
+        return self.model.detach_carry(carry)  # type: ignore
