@@ -226,47 +226,10 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
         with torch.device("cuda"):
             train_state.carry = train_state.model.initial_carry(batch)  # type: ignore
 
-    total_loss = None
-    total_lm_loss = None
-    total_q_halt_loss = None
-    total_q_continue_loss = None
-    final_metrics = None
+    # Forward
+    train_state.carry, loss, metrics, _, _ = train_state.model(carry=train_state.carry, batch=batch, return_keys=[])
 
-    while True:
-        train_state.carry, step_loss, metrics, _, all_finish = train_state.model(
-            carry=train_state.carry,
-            batch=batch,
-            return_keys=[],
-            detach_carry=False,
-        )
-
-        total_loss = step_loss if total_loss is None else (total_loss + step_loss)
-
-        if total_lm_loss is None:
-            total_lm_loss = metrics["lm_loss"]
-        else:
-            total_lm_loss = total_lm_loss + metrics["lm_loss"]
-
-        if total_q_halt_loss is None:
-            total_q_halt_loss = metrics["q_halt_loss"]
-        else:
-            total_q_halt_loss = total_q_halt_loss + metrics["q_halt_loss"]
-
-        step_q_continue = metrics.get("q_continue_loss")
-        if step_q_continue is not None:
-            if total_q_continue_loss is None:
-                total_q_continue_loss = step_q_continue
-            else:
-                total_q_continue_loss = total_q_continue_loss + step_q_continue
-
-        final_metrics = metrics
-
-        if all_finish:
-            break
-
-    assert total_loss is not None and final_metrics is not None
-
-    ((1 / global_batch_size) * total_loss).backward()
+    ((1 / global_batch_size) * loss).backward()
 
     # Allreduce
     if world_size > 1:
@@ -344,19 +307,6 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
             
         optim.step()
         optim.zero_grad()
-
-    # Detach carry before the next batch to avoid holding onto the graph
-    if train_state.carry is not None:
-        train_state.carry = train_state.model.detach_carry(train_state.carry)
-
-    # Aggregate multi-step metrics
-    metrics = {k: v.clone() if torch.is_tensor(v) else v for k, v in final_metrics.items()}
-    metrics["lm_loss"] = total_lm_loss
-    metrics["q_halt_loss"] = total_q_halt_loss
-    if total_q_continue_loss is not None:
-        metrics["q_continue_loss"] = total_q_continue_loss
-    else:
-        metrics.pop("q_continue_loss", None)
 
     # Reduce metrics
     if len(metrics):
