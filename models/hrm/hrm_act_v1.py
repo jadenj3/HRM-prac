@@ -211,7 +211,7 @@ class HierarchicalReasoningModel_ACTV1_Inner(nn.Module):
         z_H = self.H_level(z_H, z_L, value_embed, **seq_info)
 
         # LM Outputs
-        new_carry = HierarchicalReasoningModel_ACTV1InnerCarry(z_H=z_H, z_L=z_L)  # New carry no grad
+        new_carry = HierarchicalReasoningModel_ACTV1InnerCarry(z_H=z_H.detach(), z_L=z_L.detach())  # New carry no grad
         output = self.lm_head(z_H)[:, self.puzzle_emb_len:]
 
         # Q head
